@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 
 from shared.llm_factory import get_chat_llm_with_fallback
+from shared.llm_json import invoke_json_model
 from phase5_edit.intent_schema import EditIntent
 from phase5_edit.executor import execute_intent
 from shared.schema import EditResponse
@@ -84,12 +85,12 @@ class EditState(TypedDict):
 
 
 def classify_intent_node(state: EditState) -> EditState:
-    llm = _get_llm().with_structured_output(EditIntent)
+    llm = _get_llm()
     messages = [
         SystemMessage(content=CLASSIFY_SYSTEM_PROMPT),
         HumanMessage(content=f'Edit command: "{state["command"]}"'),
     ]
-    intent: EditIntent = llm.invoke(messages)
+    intent = invoke_json_model(llm, messages, EditIntent, step_name="edit_classify", max_retries=2)
     return {**state, "intent": intent}
 
 

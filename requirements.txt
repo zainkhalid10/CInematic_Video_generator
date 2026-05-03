@@ -5,15 +5,14 @@ pydantic>=2.5.0
 # === LangChain / LangGraph (spec §3) ===
 langchain>=0.2.0
 langchain-ollama>=0.1.0
-langchain-anthropic>=0.3.0
 langgraph>=0.1.0
 
 # === TTS (spec §6) ===
-# Coqui: multi-speaker offline VITS (recommended for per-character voices)
-TTS>=0.22.0
+# Coqui TTS does not publish wheels for Python 3.12+ (requires Python <3.12).
+# On 3.12+, use edge-tts (default in code) or a Python 3.11 venv for Coqui.
+TTS>=0.22.0; python_version < "3.12"
 soundfile>=0.12.0
 # Bark (optional): pip install suno-bark — set TTS_ENGINE=bark
-# edge-tts: free online Microsoft voices — set TTS_ENGINE=edge-tts if Coqui install fails
 edge-tts>=6.1.0
 pydub>=0.25.1
 

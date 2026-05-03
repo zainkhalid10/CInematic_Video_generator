@@ -26,7 +26,15 @@ _coqui_tts = None
 def _get_coqui():
     global _coqui_tts
     if _coqui_tts is None:
-        from TTS.api import TTS
+        try:
+            from TTS.api import TTS
+        except ImportError as e:
+            raise RuntimeError(
+                "Coqui TTS is not installed or unsupported on this Python version. "
+                "The upstream `TTS` package requires Python <3.12. Options: "
+                "(1) set TTS_ENGINE=edge-tts in .env, or "
+                "(2) use a Python 3.11 virtualenv and pip install TTS."
+            ) from e
 
         logger.info("Loading Coqui TTS model %s (first run may download ~200MB)...", COQUI_MODEL)
         _coqui_tts = TTS(COQUI_MODEL)
@@ -59,12 +67,19 @@ def _synthesize_bark(text: str, character_role: str, output_path: str) -> str:
 
 
 async def _synthesize_edge_async(text: str, voice: str, output_path: str) -> str:
+    """edge-tts emits MP3; we re-encode as WAV so MoviePy/ffmpeg read duration + codec reliably."""
     import edge_tts
+    from pydub import AudioSegment
 
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_mp3 = out_path.with_name(out_path.stem + "_tts.mp3")
     communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_path)
-    return output_path
+    await communicate.save(str(tmp_mp3))
+    seg = AudioSegment.from_file(str(tmp_mp3))
+    seg.export(str(out_path), format="wav")
+    tmp_mp3.unlink(missing_ok=True)
+    return str(out_path)
 
 
 def synthesize_line(

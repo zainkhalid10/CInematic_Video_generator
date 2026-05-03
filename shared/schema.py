@@ -22,6 +22,15 @@ class Character(BaseModel):
     voice_id: str = Field(..., description="Coqui TTS speaker ID, e.g. 'p225'")
     mood_default: str = Field(default="neutral", description="Default emotional tone")
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_char_id(cls, v):
+        if isinstance(v, int):
+            return f"char_{v}"
+        if isinstance(v, str) and v.strip().isdigit():
+            return f"char_{int(v.strip())}"
+        return str(v) if v is not None else v
+
 
 class StoryArc(BaseModel):
     title: str
@@ -40,6 +49,16 @@ class DialogueLine(BaseModel):
     emotion: Optional[str] = "neutral"
     pause_after_ms: int = Field(default=300, ge=0)
 
+    @field_validator("character_id", mode="before")
+    @classmethod
+    def coerce_character_id(cls, v):
+        """LLMs often emit 1 instead of \"char_1\"."""
+        if isinstance(v, int):
+            return f"char_{v}"
+        if isinstance(v, str) and v.strip().isdigit():
+            return f"char_{int(v.strip())}"
+        return str(v) if v is not None else v
+
 
 class Scene(BaseModel):
     scene_id: str = Field(..., description="e.g. 'scene_001'")
@@ -51,6 +70,23 @@ class Scene(BaseModel):
     camera_motion: Literal["zoom_in", "zoom_out", "pan_left", "pan_right", "static"]
     mood: str = Field(..., description="e.g. mysterious, joyful, tense")
     duration_seconds: float = Field(..., ge=1, le=300)
+    dialogue: List[DialogueLine] = Field(default_factory=list)
+    background_music: Optional[str] = Field(
+        default=None, description="Mood keyword for BGM selection"
+    )
+
+    @field_validator("scene_id", mode="before")
+    @classmethod
+    def coerce_scene_id(cls, v):
+        """LLMs often emit 1 instead of \"scene_001\"."""
+        if isinstance(v, int):
+            return f"scene_{int(v):03d}"
+        if isinstance(v, str):
+            s = v.strip()
+            if s.isdigit():
+                return f"scene_{int(s):03d}"
+            return s
+        return str(v)
 
     @field_validator("duration_seconds", mode="before")
     @classmethod
@@ -58,10 +94,6 @@ class Scene(BaseModel):
         """Clamp to course spec §5.5: 15–60 seconds per scene."""
         v = float(v)
         return max(15.0, min(v, 60.0))
-    dialogue: List[DialogueLine] = Field(default_factory=list)
-    background_music: Optional[str] = Field(
-        default=None, description="Mood keyword for BGM selection"
-    )
 
 
 class StoryOutput(BaseModel):

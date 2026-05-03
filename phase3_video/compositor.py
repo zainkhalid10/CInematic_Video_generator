@@ -66,22 +66,29 @@ def composite_video(
             print(f"[Phase3] Missing image for {scene.scene_id}, skipping.")
             continue
 
-        # Animate
-        clip: VideoClip = apply_animation(img_path, scene.camera_motion, scene.duration_seconds)
+        block = block_map.get(scene.scene_id)
+        if block:
+            shot_duration_s = max(0.5, (block.end_ms - block.start_ms) / 1000.0)
+        else:
+            shot_duration_s = float(scene.duration_seconds)
+
+        # Animate (one image per scene; duration aligned with Phase 2 manifest / speech pad)
+        clip: VideoClip = apply_animation(img_path, scene.camera_motion, shot_duration_s)
 
         # Attach audio
-        block = block_map.get(scene.scene_id)
         if block:
             audio = _build_scene_audio(block)
             if audio:
                 clip = clip.with_audio(audio)
+            elif block.dialogue_entries:
+                print(f"[Phase3] Warning: {scene.scene_id} has dialogue timing but missing audio files (check Phase 2 TTS).")
 
         video_clips.append(clip)
         video_assets.append(SceneVideoAsset(
             scene_id=scene.scene_id,
             image_file=img_path,
             animation_effect=scene.camera_motion,
-            duration_seconds=scene.duration_seconds,
+            duration_seconds=shot_duration_s,
         ))
 
         if ws_callback:

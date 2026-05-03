@@ -17,8 +17,8 @@ def validate_story_arc(arc: StoryArc) -> list[str]:
     errors: list[str] = []
     if len(arc.act_structure) != 3:
         errors.append("act_structure must have exactly 3 entries.")
-    if arc.total_duration_seconds < 30 or arc.total_duration_seconds > 300:
-        errors.append("total_duration_seconds must be between 30 and 300.")
+    if arc.total_duration_seconds < 60 or arc.total_duration_seconds > 300:
+        errors.append("total_duration_seconds must be between 60 and 300.")
     return errors
 
 

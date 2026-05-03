@@ -5,6 +5,8 @@ Phase 1 pipeline entry point using LangGraph StateGraph.
 """
 
 from __future__ import annotations
+import time
+
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Any
 
@@ -49,11 +51,14 @@ def build_graph() -> Any:
 def run(prompt: str, run_id: str | None = None) -> StoryOutput:
     """Run the full Phase 1 pipeline and return a StoryOutput."""
     rid = run_id or build_run_id(prompt)
+    t0 = time.perf_counter()
+    print(f"[Phase1] LangGraph start run_id={rid}")
     app = build_graph()
     final = app.invoke(
         {"prompt": prompt, "run_id": rid, "arc": None, "characters": [], "scenes": []},
         config={"configurable": {"thread_id": rid}},
     )
+    print(f"[Phase1] LangGraph finished in {time.perf_counter() - t0:.1f}s")
     return StoryOutput(
         run_id=rid,
         prompt=prompt,

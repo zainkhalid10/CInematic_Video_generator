@@ -6,9 +6,9 @@ All LLM prompt templates for Phase 1 agents.
 
 STORY_AGENT_SYSTEM = """\
 You are a professional screenwriter and story architect.
-Given a user prompt, generate a compelling story arc for a short animated video (30–120 seconds).
-Always respond with a valid JSON object matching the StoryArc schema.
-Do NOT wrap output in markdown fences.
+Given a user prompt, generate a compelling story arc for a short animated video.
+Reply with exactly ONE JSON object and nothing else (no markdown, no prose).
+Keys: title, genre, theme, logline, act_structure (array of 3 strings), total_duration_seconds (number).
 """
 
 STORY_AGENT_USER = """\
@@ -25,10 +25,9 @@ Requirements (course spec §5.5):
 
 CHARACTER_AGENT_SYSTEM = """\
 You are a character designer for animated short films.
-Given a story arc and prompt, design a cast of 1–3 characters (spec §5.5).
-Always respond with a valid JSON array of Character objects.
-Each character must have: id (char_1, char_2...), name, role, description, voice_id (Coqui VITS speaker p225–p376, e.g. p225 female protagonist, p226 male protagonist), mood_default.
-Do NOT wrap output in markdown fences.
+Design 1–3 characters. Reply with exactly ONE JSON object: {"characters": [ ... ]} and nothing else.
+Each character: id (char_1, ...), name, role (protagonist|antagonist|supporting|narrator), description, voice_id (e.g. p225, p226, p245), mood_default.
+Do not use markdown fences.
 """
 
 CHARACTER_AGENT_USER = """\
@@ -41,18 +40,13 @@ Design the cast of characters for this story.
 
 SCRIPT_AGENT_SYSTEM = """\
 You are a script writer for animated short films.
-Given a story arc and characters, write a scene-by-scene script.
-Always respond with a valid JSON array of Scene objects.
-Rules (course spec §5.5):
-- Each scene needs: scene_id, title, description, visual_prompt, camera_motion, mood, duration_seconds, dialogue.
-- visual_prompt must be a rich, detailed image generation prompt (cinematic digital art; include setting, lighting, palette).
-- camera_motion must be one of: zoom_in, zoom_out, pan_left, pan_right, static.
-- Scene mood must be one of: tense, joyful, mysterious, melancholic, triumphant, neutral.
-- Total scene durations must approximately match the story arc total_duration_seconds (overall video 60–300s).
-- Each scene duration_seconds MUST be between 15 and 60 seconds (spec).
-- Use exactly 3–6 scenes total (spec); pace for clarity over quantity.
-- Each dialogue line must have character_id, text, and optionally emotion and pause_after_ms.
-Do NOT wrap output in markdown fences.
+Reply with exactly ONE JSON object: {"scenes": [ ... ]} and nothing else (no markdown).
+Rules:
+- Use EXACTLY 3 distinct scenes — each MUST have different visual_prompts (different setting/moment/frame).
+- Each scene MUST have **at least 2 spoken dialogue lines** per scene so TTS+vocals are audible in the MP4 (not subtitles alone).
+- Each scene duration_seconds 18–42; across 3 scenes, sum close to story total_duration_seconds.
+- Fields per scene: scene_id, title, description, visual_prompt (one vivid sentence), camera_motion (zoom_in|zoom_out|pan_left|pan_right|static), mood (tense|joyful|mysterious|melancholic|triumphant|neutral), duration_seconds, dialogue.
+- Lines: character_id matching roster, natural text (~8–35 words typical), emotion optional, pause_after_ms optional (300–500).
 """
 
 SCRIPT_AGENT_USER = """\

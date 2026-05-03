@@ -1,9 +1,13 @@
 """shared/constants.py — Central configuration constants."""
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Coqui `TTS` is not installable on Python 3.12+; default to edge-tts there.
+_DEFAULT_TTS_ENGINE = "edge-tts" if sys.version_info >= (3, 12) else "coqui"
 
 # --- Paths ---
 OUTPUT_DIR   = os.getenv("OUTPUT_DIR", "./outputs")
@@ -11,13 +15,15 @@ DB_PATH      = os.getenv("DB_PATH", "./outputs/state.db")
 ASSETS_DIR   = "./assets"
 BGM_DIR      = f"{ASSETS_DIR}/bgm"
 
-# --- LLM (spec §5.2, §10.1) ---
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+# --- LLM: Ollama only (free local). Run: ollama serve && ollama pull <OLLAMA_MODEL> ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+# Ollama defaults are tiny (often ~128 tokens) — JSON scripts get truncated without this.
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "4096"))
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 
-# --- TTS: coqui | bark | edge-tts (spec §6; edge-tts = optional, no Coqui install) ---
-TTS_ENGINE = os.getenv("TTS_ENGINE", "coqui")
+# --- TTS: coqui | bark | edge-tts (spec §6) ---
+TTS_ENGINE = os.getenv("TTS_ENGINE", _DEFAULT_TTS_ENGINE)
 COQUI_MODEL = os.getenv("COQUI_MODEL", "tts_models/en/vctk/vits")
 
 # --- Image Generation (spec §7.1) ---

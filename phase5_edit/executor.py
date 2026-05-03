@@ -34,6 +34,11 @@ def execute_intent(intent: EditIntent, run_id: str) -> list[str]:
             if img_path.exists():
                 apply_filter(str(img_path), filter_name, str(img_path))
                 changes.append(f"Applied '{filter_name}' filter to {img_path.name}")
+        if changes:
+            import phase3_video as p3
+
+            p3.run(run_id)
+            changes.append("Re-composited video (Phase 3) so filters appear in MP4.")
 
     elif action == "change_scene_mood":
         new_mood = params.get("mood", "neutral")
@@ -53,6 +58,10 @@ def execute_intent(intent: EditIntent, run_id: str) -> list[str]:
     elif action == "regenerate_image":
         _regenerate_scene_image(target)
         changes.append(f"Regenerated image for {target}")
+        import phase3_video as p3
+
+        p3.run(run_id)
+        changes.append("Re-composited final_output.mp4 with new frame.")
 
     elif action == "change_bgm":
         new_mood = params.get("mood", "neutral")

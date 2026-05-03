@@ -14,6 +14,9 @@ from shared.schema import (
     Scene, Character, TimingManifest, SceneTimingBlock, AudioEntry, BGMEntry
 )
 from shared.constants import OUTPUT_DIR
+
+# Minimum length per scene clip (ms) — keeps multi-scene stories from collapsing to ~1 image / few seconds total.
+_SCENE_MIN_MS = 12_000
 from phase2_audio.tts_engine import synthesize_line
 from phase2_audio.music_selector import select_bgm
 
@@ -88,7 +91,14 @@ def build_timing_manifest(
         except FileNotFoundError as e:
             print(f"[Phase2] BGM skipped for {scene.scene_id}: {e}")
 
-        scene_end_ms = scene_start_ms + int(scene.duration_seconds * 1000)
+        planned_ms = int(float(scene.duration_seconds) * 1000)
+        if scene_audio_entries:
+            last_voice_ms = max(e.end_ms for e in scene_audio_entries) - scene_start_ms
+        else:
+            last_voice_ms = 0
+        # Hold each shot at least until speech ends (+pad), and enforce a sane floor so we get distinct frames/time.
+        resolved_ms = max(planned_ms, last_voice_ms + 1_500, _SCENE_MIN_MS)
+        scene_end_ms = scene_start_ms + resolved_ms
         scene_blocks.append(
             SceneTimingBlock(
                 scene_id=scene.scene_id,

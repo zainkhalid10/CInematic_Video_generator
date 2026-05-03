@@ -41,8 +41,7 @@ User Prompt
 
 | Layer | Technology |
 |-------|-----------|
-| LLM (primary) | Claude `claude-sonnet-4-20250514` (Anthropic API; see `.env.example`) |
-| LLM (fallback) | Ollama `llama3.2:3b` or `mistral:7b` |
+| LLM | **Ollama** (free local): `llama3.2:3b` default; try `mistral:7b` / `qwen2.5:7b` if you have RAM |
 | Agent framework | LangGraph `StateGraph` |
 | Data validation | Pydantic v2 |
 | TTS (primary) | Coqui TTS `tts_models/en/vctk/vits` (offline, multi-speaker) |
@@ -66,21 +65,21 @@ Aligned with the course specification; all of these are zero-cost tiers or fully
 
 | Use | Online (API / hosted) | Offline (local) |
 |-----|------------------------|-----------------|
-| **Story / script LLM** | Anthropic Claude (console free tier / credits), Google AI Studio (Gemini), OpenRouter | **Ollama**: `llama3.2:3b`, `mistral:7b`, `qwen2.5`, `phi3` |
+| **Story / script LLM** | — (this repo uses **Ollama only**) | **Ollama**: `llama3.2:3b`, `mistral:7b`, `qwen2.5:7b`, `phi3` |
 | **TTS** | **edge-tts** (Microsoft neural, no key in this project) | **Coqui VITS** `tts_models/en/vctk/vits`, **Bark** (`TTS_ENGINE=bark`), **Piper** (optional) |
 | **Images** | **Pollinations.ai** (`POLLINATIONS_MODEL=flux` or `turbo`) | **Automatic1111** / ComfyUI with SD 1.5, SDXL, or Flux checkpoints |
 | **BGM** | — | **CC0 library** in `assets/bgm/` (default), or **MusicGen-small** with GPU (`BGM_ENGINE=musicgen`) |
 
-The pipeline selects providers from `.env`: set `ANTHROPIC_API_KEY` for best Phase 1 quality; omit it to use Ollama only. For machines where Coqui is heavy to install, set `TTS_ENGINE=edge-tts`.
+Configure **`OLLAMA_MODEL`** in `.env` and run **`ollama pull <model>`** before the first run. On Python 3.12+, use **`TTS_ENGINE=edge-tts`** (Coqui’s pip package does not support 3.12 yet).
 
 ---
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.11+ (3.12+ works; use **`TTS_ENGINE=edge-tts`** because the Coqui **`TTS`** package does not support Python 3.12 yet)
 - Node 18+
 - FFmpeg (`brew install ffmpeg`)
-- Ollama (if using local LLM without Claude)
+- **Ollama** (required for Phase 1 & 5 LLM)
 
 ---
 
@@ -96,14 +95,12 @@ pip install -r requirements.txt
 
 # Environment variables
 cp .env.example .env
-# Edit .env with your ANTHROPIC_API_KEY
+# Optional: set OLLAMA_MODEL (default llama3.2:3b)
 
-# Install Ollama + pull model (if no API key)
 curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull llama3.2:3b
 
-# Pre-download Coqui TTS model (do once before demo!)
-python -c 'from TTS.api import TTS; TTS("tts_models/en/vctk/vits")'
+# Coqui TTS (optional, Python <3.12 only): pip install TTS && python -c 'from TTS.api import TTS; TTS("tts_models/en/vctk/vits")'
 
 # Frontend setup
 cd phase4_web/frontend && npm install && cd ../..
@@ -124,6 +121,23 @@ python main.py --prompt "..." --phase 1
 python main.py --prompt "..." --phase 2
 python main.py --prompt "..." --phase 3
 ```
+
+### Replacing one scene/frame (Phase 5 / course spec edits)
+
+After a successful run (`outputs/script.json`, `timing_manifest.json`, `outputs/images/`):
+
+1. **`POST /api/edit`** — e.g. *“Regenerate the image for scene 001”* → redraws **`outputs/images/scene_001.png`** and **re-composites** **`outputs/final_output.mp4`**.
+2. **`apply_filter`** — updates frames under `outputs/images/` then **automatically runs Phase 3** again.
+
+Re-run Phase 3 only from the CLI:
+
+```bash
+python main.py --phase 3
+```
+
+(`outputs/script.json` supplies `run_id` if you omit `--prompt`; use `--run-id` to override.)
+
+Subtitles are burned in a **second encode** while **re-using the voiced audio** from the first pass (explicit `with_audio` so the soundtrack is not dropped).
 
 ### Web Mode
 
@@ -156,12 +170,11 @@ assets/bgm/     — CC0 background music .mp3 files
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Claude API key (optional if using Ollama only) |
-| `ANTHROPIC_MODEL` | Default `claude-sonnet-4-20250514` (spec) |
-| `OPENAI_API_KEY` | OpenAI key (optional, for DALL-E) |
-| `OLLAMA_BASE_URL` | Local Ollama server URL |
-| `OLLAMA_MODEL` | e.g. `llama3.2:3b` or `mistral:7b` |
-| `TTS_ENGINE` | `coqui` (spec default), `bark`, or `edge-tts` |
+| `OLLAMA_BASE_URL` | Ollama API (default `http://localhost:11434`) |
+| `OLLAMA_MODEL` | e.g. `llama3.2:3b`, `mistral:7b`, `qwen2.5:7b` |
+| `OLLAMA_NUM_PREDICT` | Max new tokens per LLM call (default `4096`; raise if JSON is cut off) |
+| `OLLAMA_NUM_CTX` | Context window (default `8192`) |
+| `TTS_ENGINE` | `edge-tts` (default on Py 3.12+), `coqui` (Py 3.11-), or `bark` |
 | `COQUI_MODEL` | e.g. `tts_models/en/vctk/vits` |
 | `IMAGE_ENGINE` | `pollinations` or `automatic1111` |
 | `POLLINATIONS_MODEL` | e.g. `flux` (Pollinations image model id) |
@@ -203,6 +216,7 @@ Pre-generated samples are committed at [`outputs/samples/`](./outputs/samples/).
 
 ## Known Limitations / Future Work
 
+- **Local LLM speed:** Phase 1 uses three Ollama calls. If generation feels “stuck”, check logs for `[LLM] story_agent` / `character_agent` / `script_agent` timings. Truncated JSON usually means **`OLLAMA_NUM_PREDICT`** is too low (defaults are set high in code).
 - Coqui TTS requires a 200MB model download on first run — pre-download before demo.
 - pollinations.ai rate limit: 1 req/sec; add more scenes = longer generation time.
 - MusicGen requires a GPU for reasonable speed; CC0 library is the recommended default.
