@@ -1,0 +1,105 @@
+"""
+phase2_audio/tts_engine.py
+===========================
+TTS per course spec §6: Coqui (primary), Bark (alt), edge-tts (optional, no heavy deps).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from pathlib import Path
+
+from shared.constants import OUTPUT_DIR, TTS_ENGINE, COQUI_MODEL
+from phase2_audio.voice_config import (
+    get_speaker,
+    get_edge_voice,
+    get_bark_preset,
+    apply_emotion_tag,
+)
+
+logger = logging.getLogger(__name__)
+
+_coqui_tts = None
+
+
+def _get_coqui():
+    global _coqui_tts
+    if _coqui_tts is None:
+        from TTS.api import TTS
+
+        logger.info("Loading Coqui TTS model %s (first run may download ~200MB)...", COQUI_MODEL)
+        _coqui_tts = TTS(COQUI_MODEL)
+    return _coqui_tts
+
+
+def _synthesize_coqui(text: str, speaker: str, output_path: str) -> str:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    tts = _get_coqui()
+    tts.tts_to_file(text=text, file_path=output_path, speaker=speaker)
+    return output_path
+
+
+def _synthesize_bark(text: str, character_role: str, output_path: str) -> str:
+    try:
+        import numpy as np
+        from bark import SAMPLE_RATE, generate_audio
+        import soundfile as sf
+    except ImportError as e:
+        raise RuntimeError(
+            "Bark TTS requires optional deps: pip install suno-bark soundfile. "
+            "Or set TTS_ENGINE=coqui or edge-tts."
+        ) from e
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    preset = get_bark_preset(character_role)
+    audio = generate_audio(text, history_prompt=preset)
+    sf.write(output_path, audio, SAMPLE_RATE)
+    return output_path
+
+
+async def _synthesize_edge_async(text: str, voice: str, output_path: str) -> str:
+    import edge_tts
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_path)
+    return output_path
+
+
+def synthesize_line(
+    text: str,
+    character_role: str,
+    voice_id: str,
+    output_path: str,
+    emotion: str = "neutral",
+) -> str:
+    """Synthesize one dialogue line; engine from TTS_ENGINE env."""
+    tagged = apply_emotion_tag(text, emotion)
+    engine = (TTS_ENGINE or "coqui").lower()
+
+    if engine in ("edge", "edge-tts"):
+        voice = get_edge_voice(character_role, voice_id)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        asyncio.run,
+                        _synthesize_edge_async(tagged, voice, output_path),
+                    )
+                    return future.result()
+            return loop.run_until_complete(_synthesize_edge_async(tagged, voice, output_path))
+        except RuntimeError:
+            return asyncio.run(_synthesize_edge_async(tagged, voice, output_path))
+
+    if engine == "bark":
+        return _synthesize_bark(tagged, character_role, output_path)
+
+    if engine == "coqui":
+        speaker = get_speaker(character_role, voice_id)
+        return _synthesize_coqui(tagged, speaker, output_path)
+
+    raise ValueError(f"Unknown TTS_ENGINE={engine!r}; use coqui | bark | edge-tts")
